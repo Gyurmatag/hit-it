@@ -1,35 +1,38 @@
 'use client'
 
-import { SetStateAction, useState} from 'react'
-import {Cursors, id, init, tx} from '@instantdb/react'
-import {Button} from "@/components/ui/button"
-import {Input} from "@/components/ui/input"
-import {Label} from "@/components/ui/label"
-import {Card, CardContent, CardFooter, CardHeader, CardTitle} from "@/components/ui/card"
-import {Plus, Loader2} from 'lucide-react'
+import { SetStateAction, useState } from 'react'
+import { Cursors, id, init, tx } from '@instantdb/react'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Plus, Loader2 } from 'lucide-react'
 
+// Define the database schema properly
 const db = init<{
     players: {
         id: string;
         name: string;
         clicks: number;
-    },
-    cursor: {
+    };
+}, {
+    'cursor': {
         presence: {
-            name: string
-        }
-    }
+            name: string;
+        };
+    };
 }>({
     appId: "00b7eeac-4f11-4095-8df4-0d037679c915",
 });
 
+// Create the room with the correct schema for 'cursor'
 const room = db.room('cursor', '123');
 
 export default function ClickCounter() {
     const [playerName, setPlayerName] = useState('')
     const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null)
 
-    const {data, isLoading, error} = db.useQuery({
+    const { data, isLoading, error } = db.useQuery({
         players: {},
     });
 
