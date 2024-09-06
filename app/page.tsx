@@ -1,101 +1,155 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+import { SetStateAction, useState} from 'react'
+import {Cursors, id, init, tx} from '@instantdb/react'
+import {Button} from "@/components/ui/button"
+import {Input} from "@/components/ui/input"
+import {Label} from "@/components/ui/label"
+import {Card, CardContent, CardFooter, CardHeader, CardTitle} from "@/components/ui/card"
+import {Plus, Loader2} from 'lucide-react'
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+const db = init<{
+    players: {
+        id: string;
+        name: string;
+        clicks: number;
+    },
+    cursor: {
+        presence: {
+            name: string
+        }
+    }
+}>({
+    appId: "00b7eeac-4f11-4095-8df4-0d037679c915",
+});
+
+const room = db.room('cursor', '123');
+
+export default function ClickCounter() {
+    const [playerName, setPlayerName] = useState('')
+    const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null)
+
+    const {data, isLoading, error} = db.useQuery({
+        players: {},
+    });
+
+    room.useSyncPresence({
+        name: playerName
+    });
+
+    async function handleJoinGame(e: React.FormEvent) {
+        e.preventDefault()
+        if (!playerName.trim()) return;
+
+        const newPlayerId = id();
+        db.transact([
+            tx.players[newPlayerId].update({
+                name: playerName.trim(),
+                clicks: 0,
+            }),
+        ]);
+
+        setCurrentPlayerId(newPlayerId)
+    }
+
+    async function handleClick() {
+        if (!currentPlayerId) return;
+
+        const currentPlayer = data?.players.find(player => player.id === currentPlayerId);
+        if (currentPlayer) {
+            db.transact([
+                tx.players[currentPlayerId].update({
+                    clicks: (currentPlayer.clicks || 0) + 1,
+                }),
+            ]);
+        }
+    }
+
+    if (error) return <p className="p-4 flex items-center">Oops, something went wrong</p>;
+
+    return (
+        <Cursors room={room} renderCursor={(props) => (
+            <NameCursor color={props.color} name={props.presence.name} />
+        )} userCursorColor={randomDarkColor} className={cursorsClassNames}>
+            <div className="container mx-auto p-4 max-w-md">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-2xl font-bold text-center">Click Counter Game</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {!currentPlayerId ? (
+                            <form onSubmit={handleJoinGame} className="space-y-4 mb-6">
+                                <div>
+                                    <Label htmlFor="playerName">Your Name</Label>
+                                    <Input
+                                        id="playerName"
+                                        type="text"
+                                        value={playerName}
+                                        onChange={(e: {
+                                            target: { value: SetStateAction<string> }
+                                        }) => setPlayerName(e.target.value)}
+                                        placeholder="Enter your name"
+                                        required
+                                        minLength={1}
+                                    />
+                                </div>
+                                <Button type="submit" className="w-full" disabled={!playerName.trim()}>
+                                    <Plus className="w-4 h-4 mr-2"/> Join Game
+                                </Button>
+                            </form>
+                        ) : (
+                            <div className="flex flex-col items-center space-y-4">
+                                <p className="text-lg font-semibold">Welcome, {playerName}!</p>
+                                <Button onClick={handleClick} size="lg" className="w-32 h-32 rounded-full text-2xl">
+                                    Click Me!
+                                </Button>
+                            </div>
+                        )}
+                        {isLoading ? (
+                            <div className="flex justify-center items-center">
+                                <Loader2 className="w-6 h-6 animate-spin"/>
+                            </div>
+                        ) : data?.players.length ? (
+                            <div className="mt-6">
+                                <h3 className="text-lg font-semibold mb-2">Leaderboard</h3>
+                                <ul className="space-y-2">
+                                    {data.players
+                                        .sort((a, b) => (b.clicks || 0) - (a.clicks || 0))
+                                        .map((player) => (
+                                            <li key={player.id}
+                                                className="flex items-center justify-between bg-secondary p-2 rounded-md">
+                                                <span>{player.name}</span>
+                                                <span className="font-semibold">{player.clicks || 0} clicks</span>
+                                            </li>
+                                        ))}
+                                </ul>
+                            </div>
+                        ) : (
+                            <p className="italic text-muted-foreground text-center">No players yet!</p>
+                        )}
+                    </CardContent>
+                    <CardFooter>
+                        <p className="text-sm text-muted-foreground">Total players: {data?.players.length || 0}</p>
+                    </CardFooter>
+                </Card>
+            </div>
+        </Cursors>
+    )
 }
+
+function NameCursor({ color, name }: { color?: string; name: string }) {
+    return (
+        <span
+            className="rounded-b-xl rounded-r-xl border-2 bg-white/30 px-3 text-xs shadow-lg backdrop-blur-md"
+            style={{
+                borderColor: color ?? 'gray',
+            }}
+        >
+      {name}
+    </span>
+    );
+}
+
+const randomDarkColor = '#' + [0, 0, 0].map(() => Math.floor(Math.random() * 200).toString(16).padStart(2, '0')).join('');
+const cursorsClassNames =
+    'flex h-screen w-screen items-center justify-center overflow-hidden font-mono text-sm text-gray-800';
